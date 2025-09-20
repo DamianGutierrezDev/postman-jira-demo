@@ -1,19 +1,45 @@
-name: Run Postman Tests
+name: Auto Pr - Merge
+name: Run Postman Tests and Auto PR
 
 on:
   push:
     branches:
-      - feature/TA-*
+      - 'feature/TA-*'
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install Newman
         run: npm install -g newman
 
-      - name: Run Postman collection
-        run: newman run collections/TA-1-posts.json --reporters cli
+      - name: Run all collections
+        run: |
+          for file in collections/*.json; do
+            echo "Running $file"
+            newman run "$file" --reporters cli,junit --reporter-junit-export "results-${file##*/}.xml"
+          done
+
+  auto-pr:
+    needs: test   # solo se ejecuta si los tests pasaron
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: ${{ github.ref_name }}
+          base: main
+          title: "Auto PR for ${{ github.ref_name }}"
+          body: |
+            Este PR fue creado automáticamente para la rama ${{ github.ref_name}}.
+            Se fusionará automáticamente si pasan los checks.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          merge-method: squash
+          auto-merge: true
+
